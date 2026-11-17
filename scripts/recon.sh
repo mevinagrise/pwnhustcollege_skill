@@ -19,6 +19,10 @@ if [ -f "$DESC" ]; then
 fi
 
 echo ""
+echo "--- CHALLENGE DIRECTORY ---"
+ls -la "$(dirname "$BINARY")" 2>/dev/null || true
+
+echo ""
 echo "--- FILE INFO ---"
 file "$BINARY" 2>/dev/null || echo "(binary not found)"
 

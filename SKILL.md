@@ -12,7 +12,7 @@ Automates solving authorized binary exploitation challenges on pwn.hust.college.
 ## Platform Context
 
 - SSH: `ssh -tt -i ~/.ssh/key hacker@pwn.cse.hust.edu.cn`
-- Challenge binary: commonly `/challenge/solve`, but the actual path is whatever `/challenge/DESCRIPTION.md` says (e.g. the git dojo verifies with `/challenge/check`); below this is referred to as `$TARGET`
+- Challenge binary: **no fixed name or contract** — use the path `/challenge/DESCRIPTION.md` names; when it names none, enumerate `/challenge/` and pick the executable file (exclude `DESCRIPTION.md`, `*.c`, `Makefile`; the filename cannot be derived from the module id — see deployment deviation DV-1); below this is referred to as `$TARGET`
 - Description: `/challenge/DESCRIPTION.md`
 - Flag: `/flag`
 - Home: `/home/hacker` (persistent across challenges)
@@ -50,7 +50,7 @@ Full endpoint details and deployment quirks: `references/platform-api.md`.
 
 1. Confirm the SSH key path with the user (default `~/.ssh/key`; authorization was already confirmed in Phase 0).
 2. SSH into the platform: `ssh -tt -i <key_path> hacker@pwn.cse.hust.edu.cn` (`-tt` is required: some challenges check `SSH_TTY`)
-3. Read the challenge description: `cat /challenge/DESCRIPTION.md`, and determine the verification program path from it. Refer to that path as `$TARGET` in everything below; only fall back to `/challenge/solve` if the description names no path.
+3. Read the challenge description: `cat /challenge/DESCRIPTION.md`, and determine the verification program path from it. Refer to that path as `$TARGET` in everything below. If the description names no path, enumerate with `ls -la /challenge/` and pick the executable file (exclude `DESCRIPTION.md`, `*.c`, `Makefile`) — never assume a name such as `/challenge/solve` (DV-1).
 4. Run automated reconnaissance against that path: `bash recon.sh <target-path>` (the script takes the binary path as its first argument).
 5. Present a structured analysis report to the user:
    - Binary type and architecture (from `file` and `readelf -h`)
@@ -131,9 +131,18 @@ The script executes: `file`, `checksec`, `readelf -h`, `objdump -d` (main + nota
 - **Dropping `-tt` from ssh**: non-interactive sessions have no `SSH_TTY` and some challenges refuse to run
 - **Mixing up the two challenge ids**: docker start takes the string `id`, flag submission takes the numeric `challenge_id`
 - **Connecting immediately after start**: the container needs ~20 s to initialize; retry instead of assuming failure
-- **Assuming `/challenge/solve`**: the verification program path comes from DESCRIPTION.md (the git dojo uses `/challenge/check`); thread `$TARGET` through every phase
+- **Assuming a challenge binary name**: the verification program path comes from DESCRIPTION.md or an `ls /challenge/` enumeration — filenames vary per dojo and do not follow the module id (the git dojo uses `/challenge/check`, the software-security dojo uses `<something>-level1.0`); thread `$TARGET` through every phase
 - **Re-solving finished challenges**: fetch the solved list first to filter out what the account already completed (skip the filter if `list_solved` errors on this deployment)
 - **Overlooking locked dojos**: a landing page without module links means the dojo has a prerequisite; pick another dojo
 - **Trusting a stale solved list**: query the solved list at selection time and match by numeric id; challenge organization changes over time
 
 Note: `challenge_ssh` disables SSH host-key checking because challenge containers are throwaway. This is a deliberate tradeoff for this platform, not a pattern to copy for production hosts.
+
+## Deployment Deviations (Must Read)
+
+This deployment differs from upstream pwn.college in ways that will make the workflow above fail at the very start:
+
+- **DV-1**: `/challenge/solve` is not a contract — challenge binaries must be enumerated on the spot. `$TARGET` always comes from DESCRIPTION.md or an `ls` of `/challenge/`, never from an assumed name or the module id.
+- **DV-2**: on Windows file-sandbox environments (workspace-write style), the private key cannot be handed to OpenSSH (`ssh-keygen`, `icacls`, and `ssh.exe` all fail in that sandbox): generate the key pair with Python `cryptography`, register the bare public-key value through the API, and connect with `paramiko` instead of `challenge_ssh`. The API host is always `pwn.cse.hust.edu.cn` — a TLS hostname mismatch on `pwn.hust.college` is a local proxy artifact, not a platform issue.
+
+Details, evidence, and falsification criteria: `references/deployment-deviations.md#dv-1` and `references/deployment-deviations.md#dv-2` (doc id `PWNHUST-DEV-001`).
